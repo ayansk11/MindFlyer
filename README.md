@@ -6,7 +6,7 @@
 
 Transforming overwhelming thoughts into clarity with AI-driven classification, real-time mood analysis, and evidence-based interventions.
 
-[Features](#key-features) | [Live Demo](https://mindflyer.vercel.app/) | [Tech Stack](#tech-stack) | [Architecture](#system-architecture) | [Getting Started](#getting-started)
+[Features](#key-features) | [Live Demo](https://mindflyer.vercel.app/) | [Tech Stack](#tech-stack) | [Architecture](#system-architecture) | [Interactive Diagrams](https://ayansk11.github.io/MindFlyer/) | [Getting Started](#getting-started)
 
 </div>
 
@@ -95,6 +95,8 @@ Pour your raw, unstructured thoughts into MindFlyer. Our AI system instantly str
 ---
 
 ## System Architecture
+
+> **[View Interactive Diagrams](https://ayansk11.github.io/MindFlyer/)** — Animated, clickable architecture with data flow particles and component details.
 
 ### Three-Layer Design
 

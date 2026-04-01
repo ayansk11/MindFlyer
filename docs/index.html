@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MindFlyer — Interactive Architecture</title>
+<style>
+  /* ── Reset & Base ─────────────────────────────────────────────── */
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #0f0e17;
+    --surface: #1a1932;
+    --surface2: #232147;
+    --accent1: #667eea;
+    --accent2: #764ba2;
+    --accent3: #a78bfa;
+    --accent4: #6ee7b7;
+    --accent5: #f59e0b;
+    --accent6: #f87171;
+    --text: #e8e6f0;
+    --text-dim: #8b89a6;
+    --glow1: rgba(102, 126, 234, 0.3);
+    --glow2: rgba(118, 75, 162, 0.3);
+  }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    overflow-x: hidden;
+    line-height: 1.6;
+  }
+
+  .ambient {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background:
+      radial-gradient(ellipse 80% 60% at 20% 30%, rgba(102,126,234,0.08), transparent),
+      radial-gradient(ellipse 60% 50% at 80% 70%, rgba(118,75,162,0.06), transparent);
+  }
+
+  .container { max-width: 1200px; margin: 0 auto; padding: 0 24px; position: relative; z-index: 1; }
+
+  header { text-align: center; padding: 60px 0 40px; }
+
+  .logo {
+    font-size: 14px; letter-spacing: 4px; text-transform: uppercase;
+    color: var(--accent3); margin-bottom: 16px;
+  }
+
+  h1 {
+    font-size: clamp(32px, 5vw, 56px); font-weight: 700;
+    background: linear-gradient(135deg, var(--accent1), var(--accent2), var(--accent3));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    margin-bottom: 12px;
+  }
+
+  header p { color: var(--text-dim); font-size: 18px; max-width: 600px; margin: 0 auto; }
+
+  .tabs { display: flex; justify-content: center; gap: 8px; margin: 40px 0 48px; flex-wrap: wrap; }
+
+  .tab-btn {
+    padding: 10px 24px; border: 1px solid rgba(167, 139, 250, 0.2); border-radius: 100px;
+    background: transparent; color: var(--text-dim); font-size: 14px; font-weight: 500;
+    cursor: pointer; transition: all 0.3s ease; font-family: inherit;
+  }
+  .tab-btn:hover { border-color: var(--accent3); color: var(--text); background: rgba(167, 139, 250, 0.08); }
+  .tab-btn.active {
+    background: linear-gradient(135deg, var(--accent1), var(--accent2));
+    border-color: transparent; color: white; box-shadow: 0 4px 20px var(--glow1);
+  }
+
+  .diagram-view { display: none; animation: fadeIn 0.5s ease; }
+  .diagram-view.active { display: block; }
+
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+  .diagram-canvas { width: 100%; min-height: 600px; position: relative; }
+  .diagram-svg { width: 100%; height: 100%; min-height: 600px; }
+
+  .node { cursor: pointer; transition: transform 0.3s ease, filter 0.3s ease; }
+  .node:hover { transform: scale(1.05); filter: brightness(1.2); }
+  .node-box { rx: 12; ry: 12; stroke-width: 1.5; transition: all 0.3s ease; }
+  .node:hover .node-box { stroke-width: 2.5; }
+
+  .node-label {
+    font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 600;
+    fill: white; text-anchor: middle; dominant-baseline: central; pointer-events: none;
+  }
+  .node-sublabel {
+    font-family: 'Inter', sans-serif; font-size: 10px; font-weight: 400;
+    fill: rgba(255,255,255,0.6); text-anchor: middle; pointer-events: none;
+  }
+
+  .conn { stroke-width: 2; fill: none; opacity: 0.4; transition: opacity 0.3s; }
+  .particle { r: 3; opacity: 0.9; }
+
+  @keyframes pulse-ring { 0% { r: 20; opacity: 0.6; } 100% { r: 45; opacity: 0; } }
+  .pulse-ring { fill: none; stroke-width: 2; animation: pulse-ring 2s ease-out infinite; }
+
+  .layer-label {
+    font-family: 'Inter', sans-serif; font-size: 11px; letter-spacing: 3px;
+    text-transform: uppercase; fill: var(--text-dim); text-anchor: middle;
+  }
+  .layer-bg {
+    rx: 16; ry: 16; fill: rgba(255,255,255,0.02);
+    stroke: rgba(255,255,255,0.06); stroke-width: 1; stroke-dasharray: 6 4;
+  }
+
+  .info-panel {
+    position: fixed; bottom: 24px; left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background: var(--surface); border: 1px solid rgba(167,139,250,0.2);
+    border-radius: 16px; padding: 20px 28px; max-width: 500px;
+    width: calc(100% - 48px); backdrop-filter: blur(20px);
+    box-shadow: 0 8px 40px rgba(0,0,0,0.4);
+    transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); z-index: 100;
+  }
+  .info-panel.visible { transform: translateX(-50%) translateY(0); }
+  .info-panel h3 {
+    font-size: 16px; margin-bottom: 6px;
+    background: linear-gradient(90deg, var(--accent1), var(--accent3));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+  }
+  .info-panel p { color: var(--text-dim); font-size: 14px; line-height: 1.6; }
+  .info-panel .close-btn {
+    position: absolute; top: 12px; right: 16px; background: none;
+    border: none; color: var(--text-dim); font-size: 18px; cursor: pointer;
+  }
+  .info-panel .tech-tags { margin-top: 8px; }
+  .tech-tag {
+    display: inline-block; padding: 2px 10px; border-radius: 100px;
+    font-size: 11px; font-weight: 500; margin: 4px 4px 0 0;
+    background: rgba(102,126,234,0.15); color: var(--accent3);
+    border: 1px solid rgba(102,126,234,0.2);
+  }
+
+  .legend { display: flex; justify-content: center; gap: 24px; margin-bottom: 32px; flex-wrap: wrap; }
+  .legend-item { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-dim); }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+
+  @keyframes float-particle {
+    0%, 100% { transform: translateY(0) translateX(0); opacity: 0; }
+    10% { opacity: 0.5; } 90% { opacity: 0.5; }
+    50% { transform: translateY(-200px) translateX(50px); }
+  }
+  .bg-particle {
+    position: fixed; width: 3px; height: 3px; border-radius: 50%;
+    background: var(--accent3); pointer-events: none; z-index: 0;
+  }
+
+  footer { text-align: center; padding: 60px 0 40px; color: var(--text-dim); font-size: 14px; }
+  footer a { color: var(--accent3); text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<div class="ambient"></div>
+
+<div class="container">
+  <header>
+    <div class="logo">MindFlyer</div>
+    <h1>Interactive Architecture</h1>
+    <p>Click on any component to learn more. Watch the data flow in real time.</p>
+  </header>
+
+  <nav class="tabs" id="tabs"></nav>
+
+  <!-- DIAGRAM 1: SYSTEM ARCHITECTURE -->
+  <div class="diagram-view active" id="view-arch">
+    <div class="legend">
+      <div class="legend-item"><div class="legend-dot" style="background:#667eea"></div>Frontend</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#764ba2"></div>Backend</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#f59e0b"></div>External APIs</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#6ee7b7"></div>Storage</div>
+    </div>
+    <div class="diagram-canvas">
+      <svg class="diagram-svg" viewBox="0 0 1100 650" id="svg-arch">
+        <rect class="layer-bg" x="30" y="50" width="310" height="560"/>
+        <text class="layer-label" x="185" y="36">Frontend</text>
+        <rect class="layer-bg" x="400" y="50" width="280" height="560"/>
+        <text class="layer-label" x="540" y="36">Backend Proxy</text>
+        <rect class="layer-bg" x="740" y="50" width="330" height="560"/>
+        <text class="layer-label" x="905" y="36">External Services</text>
+
+        <g class="node" data-info="mood-slider" transform="translate(185,110)">
+          <circle class="pulse-ring" cx="0" cy="0" stroke="#667eea" style="animation-delay:0s"/>
+          <rect class="node-box" x="-70" y="-25" width="140" height="50" fill="#667eea" stroke="#8b9cf7"/>
+          <text class="node-label" y="-5">Mood Slider</text>
+          <text class="node-sublabel" y="12">5-point check-in</text>
+        </g>
+        <g class="node" data-info="text-input" transform="translate(185,195)">
+          <rect class="node-box" x="-70" y="-25" width="140" height="50" fill="#667eea" stroke="#8b9cf7"/>
+          <text class="node-label" y="-5">Text Input</text>
+          <text class="node-sublabel" y="12">Brain dump</text>
+        </g>
+        <g class="node" data-info="voice-rec" transform="translate(185,280)">
+          <rect class="node-box" x="-70" y="-25" width="140" height="50" fill="#667eea" stroke="#8b9cf7"/>
+          <text class="node-label" y="-5">Voice Recorder</text>
+          <text class="node-sublabel" y="12">Deepgram STT</text>
+        </g>
+        <g class="node" data-info="vapi-conv" transform="translate(185,365)">
+          <circle class="pulse-ring" cx="0" cy="0" stroke="#667eea" style="animation-delay:0.5s"/>
+          <rect class="node-box" x="-70" y="-25" width="140" height="50" fill="#5a6fd6" stroke="#8b9cf7"/>
+          <text class="node-label" y="-5">Live Convo</text>
+          <text class="node-sublabel" y="12">Vapi SDK</text>
+        </g>
+        <g class="node" data-info="orb" transform="translate(185,450)">
+          <rect class="node-box" x="-70" y="-25" width="140" height="50" fill="#667eea" stroke="#8b9cf7"/>
+          <text class="node-label" y="-5">Neural Orb</text>
+          <text class="node-sublabel" y="12">Canvas 2D</text>
+        </g>
+        <g class="node" data-info="journal" transform="translate(185,535)">
+          <rect class="node-box" x="-70" y="-25" width="140" height="50" fill="#667eea" stroke="#8b9cf7"/>
+          <text class="node-label" y="-5">Journal + Tracker</text>
+          <text class="node-sublabel" y="12">Mood insights</text>
+        </g>
+
+        <g class="node" data-info="claude-proxy" transform="translate(540,120)">
+          <circle class="pulse-ring" cx="0" cy="0" stroke="#764ba2" style="animation-delay:0.3s"/>
+          <rect class="node-box" x="-65" y="-25" width="130" height="50" fill="#764ba2" stroke="#a78bfa"/>
+          <text class="node-label" y="-5">Claude Proxy</text>
+          <text class="node-sublabel" y="12">/api/claude</text>
+        </g>
+        <g class="node" data-info="hume-proxy" transform="translate(540,215)">
+          <rect class="node-box" x="-65" y="-25" width="130" height="50" fill="#764ba2" stroke="#a78bfa"/>
+          <text class="node-label" y="-5">Hume Proxy</text>
+          <text class="node-sublabel" y="12">/api/hume/*</text>
+        </g>
+        <g class="node" data-info="dg-proxy" transform="translate(540,310)">
+          <rect class="node-box" x="-65" y="-25" width="130" height="50" fill="#764ba2" stroke="#a78bfa"/>
+          <text class="node-label" y="-5">Deepgram Proxy</text>
+          <text class="node-sublabel" y="12">/api/deepgram/*</text>
+        </g>
+        <g class="node" data-info="memory-proxy" transform="translate(540,405)">
+          <rect class="node-box" x="-65" y="-25" width="130" height="50" fill="#764ba2" stroke="#a78bfa"/>
+          <text class="node-label" y="-5">Memory Proxy</text>
+          <text class="node-sublabel" y="12">/api/memory/*</text>
+        </g>
+        <g class="node" data-info="therapist-ep" transform="translate(540,500)">
+          <rect class="node-box" x="-65" y="-25" width="130" height="50" fill="#764ba2" stroke="#a78bfa"/>
+          <text class="node-label" y="-5">Therapist Search</text>
+          <text class="node-sublabel" y="12">/api/therapists/*</text>
+        </g>
+        <g class="node" data-info="crisis-ep" transform="translate(540,580)">
+          <rect class="node-box" x="-65" y="-25" width="130" height="50" fill="#6b2140" stroke="#f87171"/>
+          <text class="node-label" y="-5">Crisis Resources</text>
+          <text class="node-sublabel" y="12">988 Lifeline</text>
+        </g>
+
+        <g class="node" data-info="claude-api" transform="translate(905,120)">
+          <circle class="pulse-ring" cx="0" cy="0" stroke="#f59e0b" style="animation-delay:0.7s"/>
+          <rect class="node-box" x="-75" y="-25" width="150" height="50" fill="#92400e" stroke="#f59e0b"/>
+          <text class="node-label" y="-5">Claude API</text>
+          <text class="node-sublabel" y="12">Anthropic</text>
+        </g>
+        <g class="node" data-info="hume-api" transform="translate(905,215)">
+          <rect class="node-box" x="-75" y="-25" width="150" height="50" fill="#92400e" stroke="#f59e0b"/>
+          <text class="node-label" y="-5">Hume AI</text>
+          <text class="node-sublabel" y="12">Emotion detection</text>
+        </g>
+        <g class="node" data-info="dg-api" transform="translate(905,310)">
+          <rect class="node-box" x="-75" y="-25" width="150" height="50" fill="#92400e" stroke="#f59e0b"/>
+          <text class="node-label" y="-5">Deepgram</text>
+          <text class="node-sublabel" y="12">Nova-2 STT + TTS</text>
+        </g>
+        <g class="node" data-info="supermemory" transform="translate(905,405)">
+          <rect class="node-box" x="-75" y="-25" width="150" height="50" fill="#065f46" stroke="#6ee7b7"/>
+          <text class="node-label" y="-5">Supermemory</text>
+          <text class="node-sublabel" y="12">Per-user AI memory</text>
+        </g>
+        <g class="node" data-info="nppes" transform="translate(905,500)">
+          <rect class="node-box" x="-75" y="-25" width="150" height="50" fill="#92400e" stroke="#f59e0b"/>
+          <text class="node-label" y="-5">NPPES Registry</text>
+          <text class="node-sublabel" y="12">CMS.gov (free)</text>
+        </g>
+        <g class="node" data-info="vapi-api" transform="translate(905,580)">
+          <rect class="node-box" x="-75" y="-25" width="150" height="50" fill="#92400e" stroke="#f59e0b"/>
+          <text class="node-label" y="-5">Vapi Voice</text>
+          <text class="node-sublabel" y="12">Real-time calls</text>
+        </g>
+
+        <line class="conn" x1="255" y1="110" x2="475" y2="120" stroke="#667eea"/>
+        <line class="conn" x1="255" y1="195" x2="475" y2="120" stroke="#667eea"/>
+        <line class="conn" x1="255" y1="280" x2="475" y2="310" stroke="#667eea"/>
+        <line class="conn" x1="255" y1="195" x2="475" y2="215" stroke="#667eea"/>
+        <line class="conn" x1="255" y1="195" x2="475" y2="405" stroke="#667eea"/>
+        <line class="conn" x1="605" y1="120" x2="830" y2="120" stroke="#a78bfa"/>
+        <line class="conn" x1="605" y1="215" x2="830" y2="215" stroke="#a78bfa"/>
+        <line class="conn" x1="605" y1="310" x2="830" y2="310" stroke="#a78bfa"/>
+        <line class="conn" x1="605" y1="405" x2="830" y2="405" stroke="#a78bfa"/>
+        <line class="conn" x1="605" y1="500" x2="830" y2="500" stroke="#a78bfa"/>
+        <line class="conn" x1="255" y1="365" x2="830" y2="580" stroke="#f59e0b" stroke-dasharray="6 4"/>
+
+        <circle class="particle" fill="#667eea"><animateMotion dur="2s" repeatCount="indefinite" path="M255,110 L475,120"/></circle>
+        <circle class="particle" fill="#667eea"><animateMotion dur="2.5s" repeatCount="indefinite" path="M255,195 L475,120"/></circle>
+        <circle class="particle" fill="#a78bfa"><animateMotion dur="1.8s" repeatCount="indefinite" path="M605,120 L830,120"/></circle>
+        <circle class="particle" fill="#a78bfa"><animateMotion dur="2.2s" repeatCount="indefinite" path="M605,405 L830,405"/></circle>
+        <circle class="particle" fill="#f59e0b"><animateMotion dur="3s" repeatCount="indefinite" path="M255,365 L830,580"/></circle>
+        <circle class="particle" fill="#a78bfa"><animateMotion dur="2s" repeatCount="indefinite" path="M605,215 L830,215"/></circle>
+        <circle class="particle" fill="#a78bfa"><animateMotion dur="2.3s" repeatCount="indefinite" path="M605,310 L830,310"/></circle>
+      </svg>
+    </div>
+  </div>
+
+  <!-- DIAGRAM 2: AI PIPELINE -->
+  <div class="diagram-view" id="view-pipeline">
+    <div class="legend">
+      <div class="legend-item"><div class="legend-dot" style="background:#667eea"></div>Input</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#764ba2"></div>Processing</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#6ee7b7"></div>Output</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#f87171"></div>Crisis Path</div>
+    </div>
+    <div class="diagram-canvas">
+      <svg class="diagram-svg" viewBox="0 0 1100 500" id="svg-pipeline">
+        <g class="node" data-info="user-input" transform="translate(100,160)">
+          <circle class="pulse-ring" cx="0" cy="0" stroke="#667eea"/>
+          <rect class="node-box" x="-70" y="-30" width="140" height="60" fill="#667eea" stroke="#8b9cf7"/>
+          <text class="node-label" y="-7">User Input</text>
+          <text class="node-sublabel" y="10">Text or Voice</text>
+        </g>
+        <g class="node" data-info="stt-node" transform="translate(100,310)">
+          <rect class="node-box" x="-70" y="-30" width="140" height="60" fill="#5a6fd6" stroke="#8b9cf7"/>
+          <text class="node-label" y="-7">Deepgram STT</text>
+          <text class="node-sublabel" y="10">Nova-2</text>
+        </g>
+        <g class="node" data-info="mood-strat" transform="translate(310,235)">
+          <rect class="node-box" x="-75" y="-30" width="150" height="60" fill="#764ba2" stroke="#a78bfa"/>
+          <text class="node-label" y="-7">Mood Strategy</text>
+          <text class="node-sublabel" y="10">5 response modes</text>
+        </g>
+        <g class="node" data-info="memory-inject" transform="translate(310,380)">
+          <rect class="node-box" x="-75" y="-25" width="150" height="50" fill="#065f46" stroke="#6ee7b7"/>
+          <text class="node-label" y="-5">Memory Context</text>
+          <text class="node-sublabel" y="12">Supermemory card</text>
+        </g>
+        <g class="node" data-info="claude-analysis" transform="translate(530,235)">
+          <circle class="pulse-ring" cx="0" cy="0" stroke="#a78bfa" style="animation-delay:0.4s"/>
+          <rect class="node-box" x="-70" y="-35" width="140" height="70" fill="#5b21b6" stroke="#a78bfa"/>
+          <text class="node-label" y="-10">Claude</text>
+          <text class="node-sublabel" y="7">Analysis +</text>
+          <text class="node-sublabel" y="20">Personalization</text>
+        </g>
+        <g class="node" data-info="crisis-check" transform="translate(710,235)">
+          <polygon points="0,-40 50,0 0,40 -50,0" fill="#3b1532" stroke="#f87171" stroke-width="1.5"/>
+          <text class="node-label" y="-5" fill="#f87171" font-size="11">Crisis?</text>
+        </g>
+        <g class="node" data-info="crisis-path" transform="translate(710,100)">
+          <rect class="node-box" x="-60" y="-25" width="120" height="50" fill="#7f1d1d" stroke="#f87171"/>
+          <text class="node-label" y="-5">988 Lifeline</text>
+          <text class="node-sublabel" y="12">Crisis overlay</text>
+        </g>
+        <g class="node" data-info="ack-output" transform="translate(910,120)">
+          <rect class="node-box" x="-65" y="-22" width="130" height="44" fill="#065f46" stroke="#6ee7b7"/>
+          <text class="node-label" y="0">Acknowledgment</text>
+        </g>
+        <g class="node" data-info="insight-output" transform="translate(910,195)">
+          <rect class="node-box" x="-65" y="-22" width="130" height="44" fill="#065f46" stroke="#6ee7b7"/>
+          <text class="node-label" y="0">Insight</text>
+        </g>
+        <g class="node" data-info="action-output" transform="translate(910,270)">
+          <rect class="node-box" x="-65" y="-22" width="130" height="44" fill="#065f46" stroke="#6ee7b7"/>
+          <text class="node-label" y="0">Micro-Action</text>
+        </g>
+        <g class="node" data-info="affirm-output" transform="translate(910,345)">
+          <rect class="node-box" x="-65" y="-22" width="130" height="44" fill="#065f46" stroke="#6ee7b7"/>
+          <text class="node-label" y="0">Affirmation</text>
+        </g>
+        <g class="node" data-info="save-mem" transform="translate(910,440)">
+          <circle class="pulse-ring" cx="0" cy="0" stroke="#6ee7b7" style="animation-delay:1s"/>
+          <rect class="node-box" x="-65" y="-25" width="130" height="50" fill="#065f46" stroke="#6ee7b7"/>
+          <text class="node-label" y="-5">Save to</text>
+          <text class="node-sublabel" y="12">Supermemory</text>
+        </g>
+
+        <line class="conn" x1="170" y1="160" x2="235" y2="235" stroke="#667eea"/>
+        <line class="conn" x1="100" y1="190" x2="100" y2="280" stroke="#667eea"/>
+        <line class="conn" x1="170" y1="310" x2="235" y2="250" stroke="#667eea"/>
+        <line class="conn" x1="385" y1="235" x2="460" y2="235" stroke="#a78bfa"/>
+        <line class="conn" x1="310" y1="355" x2="470" y2="260" stroke="#6ee7b7" stroke-dasharray="4 4"/>
+        <line class="conn" x1="600" y1="235" x2="660" y2="235" stroke="#a78bfa"/>
+        <line class="conn" x1="710" y1="195" x2="710" y2="125" stroke="#f87171"/>
+        <line class="conn" x1="760" y1="235" x2="845" y2="195" stroke="#6ee7b7"/>
+        <line class="conn" x1="760" y1="235" x2="845" y2="120" stroke="#6ee7b7"/>
+        <line class="conn" x1="760" y1="235" x2="845" y2="270" stroke="#6ee7b7"/>
+        <line class="conn" x1="760" y1="235" x2="845" y2="345" stroke="#6ee7b7"/>
+        <line class="conn" x1="910" y1="370" x2="910" y2="415" stroke="#6ee7b7" stroke-dasharray="4 4"/>
+
+        <circle class="particle" fill="#667eea"><animateMotion dur="1.5s" repeatCount="indefinite" path="M170,160 L235,235"/></circle>
+        <circle class="particle" fill="#a78bfa"><animateMotion dur="2s" repeatCount="indefinite" path="M385,235 L460,235"/></circle>
+        <circle class="particle" fill="#a78bfa"><animateMotion dur="1.8s" repeatCount="indefinite" path="M600,235 L660,235"/></circle>
+        <circle class="particle" fill="#6ee7b7"><animateMotion dur="1.5s" repeatCount="indefinite" path="M760,235 L845,195"/></circle>
+        <circle class="particle" fill="#6ee7b7"><animateMotion dur="2s" repeatCount="indefinite" path="M760,235 L845,270"/></circle>
+
+        <text x="100" y="245" font-size="10" fill="#8b89a6" text-anchor="middle" font-family="Inter">voice only</text>
+        <text x="705" y="163" font-size="10" fill="#f87171" text-anchor="middle" font-family="Inter">YES</text>
+        <text x="770" y="220" font-size="10" fill="#6ee7b7" text-anchor="start" font-family="Inter">NO</text>
+      </svg>
+    </div>
+  </div>
+
+  <!-- DIAGRAM 3: VOICE FLOW -->
+  <div class="diagram-view" id="view-voice">
+    <div class="legend">
+      <div class="legend-item"><div class="legend-dot" style="background:#667eea"></div>User Action</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#f59e0b"></div>Listening</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#764ba2"></div>Processing</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#6ee7b7"></div>Speaking</div>
+    </div>
+    <div class="diagram-canvas">
+      <svg class="diagram-svg" viewBox="0 0 1100 500" id="svg-voice">
+        <g class="node" data-info="start-call" transform="translate(550,80)">
+          <circle class="pulse-ring" cx="0" cy="0" stroke="#667eea"/>
+          <rect class="node-box" x="-80" y="-28" width="160" height="56" fill="#667eea" stroke="#8b9cf7"/>
+          <text class="node-label" y="-5">Start Conversation</text>
+          <text class="node-sublabel" y="12">User taps button</text>
+        </g>
+        <g class="node" data-info="vapi-init" transform="translate(550,190)">
+          <rect class="node-box" x="-65" y="-25" width="130" height="50" fill="#764ba2" stroke="#a78bfa"/>
+          <text class="node-label" y="-5">Vapi Initializes</text>
+          <text class="node-sublabel" y="12">WebRTC connect</text>
+        </g>
+        <g class="node" data-info="listening" transform="translate(250,310)">
+          <circle class="pulse-ring" cx="0" cy="0" stroke="#f59e0b" style="animation-delay:0.2s"/>
+          <rect class="node-box" x="-65" y="-30" width="130" height="60" fill="#78350f" stroke="#f59e0b"/>
+          <text class="node-label" y="-7">Listening</text>
+          <text class="node-sublabel" y="10">Orb pulses</text>
+        </g>
+        <g class="node" data-info="transcribing" transform="translate(250,190)">
+          <rect class="node-box" x="-65" y="-25" width="130" height="50" fill="#764ba2" stroke="#a78bfa"/>
+          <text class="node-label" y="-5">Deepgram STT</text>
+          <text class="node-sublabel" y="12">Transcribes</text>
+        </g>
+        <g class="node" data-info="ai-process" transform="translate(550,390)">
+          <circle class="pulse-ring" cx="0" cy="0" stroke="#a78bfa" style="animation-delay:0.6s"/>
+          <rect class="node-box" x="-65" y="-25" width="130" height="50" fill="#5b21b6" stroke="#a78bfa"/>
+          <text class="node-label" y="-5">AI Response</text>
+          <text class="node-sublabel" y="12">GPT-4o-mini</text>
+        </g>
+        <g class="node" data-info="tts" transform="translate(850,310)">
+          <rect class="node-box" x="-65" y="-25" width="130" height="50" fill="#065f46" stroke="#6ee7b7"/>
+          <text class="node-label" y="-5">Voice Synthesis</text>
+          <text class="node-sublabel" y="12">OpenAI Nova</text>
+        </g>
+        <g class="node" data-info="speaking-state" transform="translate(850,190)">
+          <circle class="pulse-ring" cx="0" cy="0" stroke="#6ee7b7" style="animation-delay:0.9s"/>
+          <rect class="node-box" x="-65" y="-30" width="130" height="60" fill="#064e3b" stroke="#6ee7b7"/>
+          <text class="node-label" y="-7">Speaking</text>
+          <text class="node-sublabel" y="10">Orb animates</text>
+        </g>
+        <g class="node" data-info="end-call" transform="translate(550,480)">
+          <rect class="node-box" x="-80" y="-22" width="160" height="44" fill="#3b1532" stroke="#f87171"/>
+          <text class="node-label" y="0">Save Transcript</text>
+        </g>
+
+        <path class="conn" d="M550,108 L550,165" stroke="#667eea"/>
+        <path class="conn" d="M485,190 L315,190" stroke="#a78bfa"/>
+        <path class="conn" d="M250,215 L250,280" stroke="#a78bfa"/>
+        <path class="conn" d="M315,310 L485,365" stroke="#f59e0b"/>
+        <path class="conn" d="M615,390 L785,335" stroke="#a78bfa"/>
+        <path class="conn" d="M850,285 L850,220" stroke="#6ee7b7"/>
+        <path class="conn" d="M785,190 L615,190" stroke="#6ee7b7" stroke-dasharray="4 4"/>
+        <path class="conn" d="M785,175 C650,100 400,100 265,280" stroke="rgba(255,255,255,0.15)" stroke-dasharray="8 4"/>
+        <text x="530" y="130" font-size="10" fill="#8b89a6" text-anchor="middle" font-family="Inter">conversation loop</text>
+        <path class="conn" d="M550,415 L550,458" stroke="#f87171" stroke-dasharray="4 4"/>
+
+        <circle class="particle" fill="#f59e0b"><animateMotion dur="2s" repeatCount="indefinite" path="M315,310 L485,365"/></circle>
+        <circle class="particle" fill="#a78bfa"><animateMotion dur="2s" repeatCount="indefinite" path="M615,390 L785,335"/></circle>
+        <circle class="particle" fill="#6ee7b7"><animateMotion dur="1.5s" repeatCount="indefinite" path="M850,285 L850,220"/></circle>
+        <circle class="particle" fill="#a78bfa"><animateMotion dur="2.5s" repeatCount="indefinite" path="M485,190 L315,190"/></circle>
+      </svg>
+    </div>
+  </div>
+
+  <!-- DIAGRAM 4: MOOD SYSTEM -->
+  <div class="diagram-view" id="view-mood">
+    <div class="legend">
+      <div class="legend-item"><div class="legend-dot" style="background:#f87171"></div>Very Negative</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#f59e0b"></div>Negative</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#8b89a6"></div>Neutral</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#a78bfa"></div>Positive</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#4ade80"></div>Very Positive</div>
+    </div>
+    <div class="diagram-canvas">
+      <svg class="diagram-svg" viewBox="0 0 1100 480" id="svg-mood">
+        <g class="node" data-info="slider-in" transform="translate(120,240)">
+          <circle class="pulse-ring" cx="0" cy="0" stroke="#667eea"/>
+          <rect class="node-box" x="-80" y="-35" width="160" height="70" fill="#667eea" stroke="#8b9cf7"/>
+          <text class="node-label" y="-10">Mood Slider</text>
+          <text class="node-sublabel" y="7">User self-report</text>
+          <text class="node-sublabel" y="20">5-point scale</text>
+        </g>
+        <g class="node" data-info="vn-strat" transform="translate(420,70)">
+          <rect class="node-box" x="-85" y="-25" width="170" height="50" fill="#7f1d1d" stroke="#f87171"/>
+          <text class="node-label" y="-5" fill="#fca5a5">Very Negative (-2)</text>
+          <text class="node-sublabel" y="12">Ground + safety first</text>
+        </g>
+        <g class="node" data-info="neg-strat" transform="translate(420,155)">
+          <rect class="node-box" x="-85" y="-25" width="170" height="50" fill="#78350f" stroke="#f59e0b"/>
+          <text class="node-label" y="-5" fill="#fcd34d">Negative (-1)</text>
+          <text class="node-sublabel" y="12">Compassionate presence</text>
+        </g>
+        <g class="node" data-info="neu-strat" transform="translate(420,240)">
+          <rect class="node-box" x="-85" y="-25" width="170" height="50" fill="#1e1b4b" stroke="#8b89a6"/>
+          <text class="node-label" y="-5">Neutral (0)</text>
+          <text class="node-sublabel" y="12">Gentle clarity</text>
+        </g>
+        <g class="node" data-info="pos-strat" transform="translate(420,325)">
+          <rect class="node-box" x="-85" y="-25" width="170" height="50" fill="#312e81" stroke="#a78bfa"/>
+          <text class="node-label" y="-5" fill="#c4b5fd">Positive (+1)</text>
+          <text class="node-sublabel" y="12">Affirm + build on it</text>
+        </g>
+        <g class="node" data-info="vp-strat" transform="translate(420,410)">
+          <rect class="node-box" x="-85" y="-25" width="170" height="50" fill="#064e3b" stroke="#4ade80"/>
+          <text class="node-label" y="-5" fill="#86efac">Very Positive (+2)</text>
+          <text class="node-sublabel" y="12">Celebrate + lock in</text>
+        </g>
+        <g class="node" data-info="tone-adapt" transform="translate(730,115)">
+          <rect class="node-box" x="-80" y="-25" width="160" height="50" fill="#1e1b4b" stroke="#667eea"/>
+          <text class="node-label" y="-5">Acknowledgment</text>
+          <text class="node-sublabel" y="12">Tone matches mood</text>
+        </g>
+        <g class="node" data-info="depth-adapt" transform="translate(730,200)">
+          <rect class="node-box" x="-80" y="-25" width="160" height="50" fill="#1e1b4b" stroke="#667eea"/>
+          <text class="node-label" y="-5">Insight Depth</text>
+          <text class="node-sublabel" y="12">Varies by state</text>
+        </g>
+        <g class="node" data-info="urgency-adapt" transform="translate(730,285)">
+          <rect class="node-box" x="-80" y="-25" width="160" height="50" fill="#1e1b4b" stroke="#667eea"/>
+          <text class="node-label" y="-5">Micro-Action</text>
+          <text class="node-sublabel" y="12">Urgency varies</text>
+        </g>
+        <g class="node" data-info="stress-adapt" transform="translate(730,370)">
+          <rect class="node-box" x="-80" y="-25" width="160" height="50" fill="#1e1b4b" stroke="#667eea"/>
+          <text class="node-label" y="-5">Stress Level</text>
+          <text class="node-sublabel" y="12">0-95 scored</text>
+        </g>
+        <g class="node" data-info="orb-react" transform="translate(970,240)">
+          <circle class="pulse-ring" cx="0" cy="0" stroke="#a78bfa" style="animation-delay:0.5s"/>
+          <circle cx="0" cy="0" r="40" fill="url(#orbGrad)" stroke="#a78bfa" stroke-width="1.5"/>
+          <text class="node-label" y="-5">Orb</text>
+          <text class="node-sublabel" y="12">Reacts</text>
+        </g>
+        <defs><radialGradient id="orbGrad"><stop offset="0%" stop-color="#a78bfa" stop-opacity="0.4"/><stop offset="100%" stop-color="#667eea" stop-opacity="0.1"/></radialGradient></defs>
+
+        <line class="conn" x1="200" y1="220" x2="335" y2="70" stroke="#f87171"/>
+        <line class="conn" x1="200" y1="230" x2="335" y2="155" stroke="#f59e0b"/>
+        <line class="conn" x1="200" y1="240" x2="335" y2="240" stroke="#8b89a6"/>
+        <line class="conn" x1="200" y1="250" x2="335" y2="325" stroke="#a78bfa"/>
+        <line class="conn" x1="200" y1="260" x2="335" y2="410" stroke="#4ade80"/>
+        <line class="conn" x1="505" y1="155" x2="650" y2="140" stroke="rgba(255,255,255,0.15)"/>
+        <line class="conn" x1="505" y1="240" x2="650" y2="200" stroke="rgba(255,255,255,0.15)"/>
+        <line class="conn" x1="505" y1="240" x2="650" y2="285" stroke="rgba(255,255,255,0.15)"/>
+        <line class="conn" x1="505" y1="325" x2="650" y2="370" stroke="rgba(255,255,255,0.15)"/>
+        <line class="conn" x1="810" y1="200" x2="930" y2="235" stroke="#a78bfa" stroke-dasharray="4 4"/>
+        <line class="conn" x1="810" y1="285" x2="930" y2="245" stroke="#a78bfa" stroke-dasharray="4 4"/>
+
+        <circle class="particle" fill="#f87171"><animateMotion dur="2s" repeatCount="indefinite" path="M200,220 L335,70"/></circle>
+        <circle class="particle" fill="#4ade80"><animateMotion dur="2.5s" repeatCount="indefinite" path="M200,260 L335,410"/></circle>
+        <circle class="particle" fill="#a78bfa"><animateMotion dur="2s" repeatCount="indefinite" path="M810,200 L930,235"/></circle>
+      </svg>
+    </div>
+  </div>
+
+  <!-- DIAGRAM 5: DATA FLOW SEQUENCE -->
+  <div class="diagram-view" id="view-data">
+    <div class="legend">
+      <div class="legend-item"><div class="legend-dot" style="background:#667eea"></div>Request</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#6ee7b7"></div>Response</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#f59e0b"></div>Background</div>
+    </div>
+    <div class="diagram-canvas">
+      <svg class="diagram-svg" viewBox="0 0 1100 580" id="svg-data">
+        <defs>
+          <marker id="arrowBlue" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#667eea"/></marker>
+          <marker id="arrowGreen" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#6ee7b7"/></marker>
+          <marker id="arrowGold" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#f59e0b"/></marker>
+        </defs>
+
+        <rect x="90" y="30" width="100" height="40" rx="8" fill="#667eea" stroke="#8b9cf7"/>
+        <text class="node-label" x="140" y="55">User</text>
+        <line x1="140" y1="70" x2="140" y2="540" stroke="#667eea" stroke-width="1" stroke-dasharray="4 4" opacity="0.3"/>
+        <rect x="310" y="30" width="100" height="40" rx="8" fill="#667eea" stroke="#8b9cf7"/>
+        <text class="node-label" x="360" y="55">Frontend</text>
+        <line x1="360" y1="70" x2="360" y2="540" stroke="#667eea" stroke-width="1" stroke-dasharray="4 4" opacity="0.3"/>
+        <rect x="530" y="30" width="100" height="40" rx="8" fill="#764ba2" stroke="#a78bfa"/>
+        <text class="node-label" x="580" y="55">Backend</text>
+        <line x1="580" y1="70" x2="580" y2="540" stroke="#764ba2" stroke-width="1" stroke-dasharray="4 4" opacity="0.3"/>
+        <rect x="740" y="30" width="100" height="40" rx="8" fill="#92400e" stroke="#f59e0b"/>
+        <text class="node-label" x="790" y="55">Claude</text>
+        <line x1="790" y1="70" x2="790" y2="540" stroke="#f59e0b" stroke-width="1" stroke-dasharray="4 4" opacity="0.3"/>
+        <rect x="930" y="30" width="120" height="40" rx="8" fill="#065f46" stroke="#6ee7b7"/>
+        <text class="node-label" x="990" y="55">Supermemory</text>
+        <line x1="990" y1="70" x2="990" y2="540" stroke="#6ee7b7" stroke-width="1" stroke-dasharray="4 4" opacity="0.3"/>
+
+        <line x1="145" y1="110" x2="355" y2="110" stroke="#667eea" stroke-width="2" marker-end="url(#arrowBlue)"/>
+        <text x="250" y="105" font-size="10" fill="#8b9cf7" text-anchor="middle" font-family="Inter">Types thought + mood</text>
+
+        <line x1="365" y1="155" x2="575" y2="155" stroke="#667eea" stroke-width="2" marker-end="url(#arrowBlue)"/>
+        <text x="470" y="150" font-size="10" fill="#8b9cf7" text-anchor="middle" font-family="Inter">POST /api/claude</text>
+
+        <line x1="585" y1="200" x2="985" y2="200" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="6 3" marker-end="url(#arrowGold)"/>
+        <text x="785" y="195" font-size="10" fill="#f59e0b" text-anchor="middle" font-family="Inter">Load user memory card</text>
+
+        <line x1="985" y1="240" x2="585" y2="240" stroke="#6ee7b7" stroke-width="1.5" stroke-dasharray="6 3" marker-end="url(#arrowGreen)"/>
+        <text x="785" y="235" font-size="10" fill="#6ee7b7" text-anchor="middle" font-family="Inter">Memory context</text>
+
+        <line x1="585" y1="290" x2="785" y2="290" stroke="#667eea" stroke-width="2" marker-end="url(#arrowBlue)"/>
+        <text x="685" y="285" font-size="10" fill="#8b9cf7" text-anchor="middle" font-family="Inter">Analyze + personalize</text>
+
+        <line x1="785" y1="340" x2="585" y2="340" stroke="#6ee7b7" stroke-width="2" marker-end="url(#arrowGreen)"/>
+        <text x="685" y="335" font-size="10" fill="#6ee7b7" text-anchor="middle" font-family="Inter">JSON response</text>
+
+        <line x1="575" y1="390" x2="365" y2="390" stroke="#6ee7b7" stroke-width="2" marker-end="url(#arrowGreen)"/>
+        <text x="470" y="385" font-size="10" fill="#6ee7b7" text-anchor="middle" font-family="Inter">Structured analysis</text>
+
+        <rect x="335" y="415" width="50" height="30" rx="4" fill="rgba(167,139,250,0.15)" stroke="#a78bfa" stroke-width="1"/>
+        <text x="360" y="435" font-size="9" fill="#a78bfa" text-anchor="middle" font-family="Inter">Animate</text>
+
+        <line x1="365" y1="470" x2="575" y2="470" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="6 3" marker-end="url(#arrowGold)"/>
+        <text x="468" y="465" font-size="10" fill="#f59e0b" text-anchor="middle" font-family="Inter">POST /api/memory/add</text>
+
+        <line x1="585" y1="510" x2="985" y2="510" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="6 3" marker-end="url(#arrowGold)"/>
+        <text x="785" y="505" font-size="10" fill="#f59e0b" text-anchor="middle" font-family="Inter">Save entry (fire and forget)</text>
+
+        <line x1="355" y1="540" x2="145" y2="540" stroke="#6ee7b7" stroke-width="2" marker-end="url(#arrowGreen)"/>
+        <text x="250" y="535" font-size="10" fill="#6ee7b7" text-anchor="middle" font-family="Inter">Show results to user</text>
+
+        <circle class="particle" fill="#667eea"><animateMotion dur="1.5s" repeatCount="indefinite" path="M145,110 L355,110"/></circle>
+        <circle class="particle" fill="#667eea"><animateMotion dur="2s" repeatCount="indefinite" path="M365,155 L575,155" begin="0.3s"/></circle>
+        <circle class="particle" fill="#667eea"><animateMotion dur="2s" repeatCount="indefinite" path="M585,290 L785,290" begin="0.8s"/></circle>
+        <circle class="particle" fill="#6ee7b7"><animateMotion dur="1.5s" repeatCount="indefinite" path="M785,340 L585,340" begin="1.2s"/></circle>
+        <circle class="particle" fill="#6ee7b7"><animateMotion dur="1.5s" repeatCount="indefinite" path="M575,390 L365,390" begin="1.5s"/></circle>
+        <circle class="particle" fill="#f59e0b"><animateMotion dur="2.5s" repeatCount="indefinite" path="M585,510 L985,510" begin="2s"/></circle>
+      </svg>
+    </div>
+  </div>
+
+  <footer>
+    <p>
+      <a href="https://mindflyer.vercel.app/">Live App</a> &middot;
+      <a href="https://github.com/Ayansk11/MindFlyer">GitHub Repo</a>
+    </p>
+    <p style="margin-top:8px">Built by Ayan, Aaryan, Chirag &amp; Adith</p>
+  </footer>
+</div>
+
+<!-- Info Panel -->
+<div class="info-panel" id="info-panel">
+  <button class="close-btn" onclick="hideInfo()">&times;</button>
+  <h3 id="info-title">Component</h3>
+  <p id="info-desc">Description</p>
+  <div class="tech-tags" id="info-tags"></div>
+</div>
+
+<script>
+// Background particles
+for (var i = 0; i < 20; i++) {
+  var p = document.createElement('div');
+  p.className = 'bg-particle';
+  p.style.left = Math.random() * 100 + '%';
+  p.style.top = Math.random() * 100 + '%';
+  p.style.animation = 'float-particle ' + (8 + Math.random() * 12) + 's ease-in-out ' + (Math.random() * 10) + 's infinite';
+  p.style.opacity = '0';
+  document.body.appendChild(p);
+}
+
+// Build tabs
+var tabDefs = [
+  { id: 'arch', label: 'System Architecture' },
+  { id: 'pipeline', label: 'AI Pipeline' },
+  { id: 'voice', label: 'Voice Flow' },
+  { id: 'mood', label: 'Mood System' },
+  { id: 'data', label: 'Data Flow' }
+];
+var tabsEl = document.getElementById('tabs');
+tabDefs.forEach(function(t, i) {
+  var btn = document.createElement('button');
+  btn.className = 'tab-btn' + (i === 0 ? ' active' : '');
+  btn.textContent = t.label;
+  btn.setAttribute('data-tab', t.id);
+  btn.addEventListener('click', function() { showDiagram(t.id, btn); });
+  tabsEl.appendChild(btn);
+});
+
+function showDiagram(id, clickedBtn) {
+  document.querySelectorAll('.diagram-view').forEach(function(v) { v.classList.remove('active'); });
+  document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
+  document.getElementById('view-' + id).classList.add('active');
+  if (clickedBtn) clickedBtn.classList.add('active');
+  hideInfo();
+}
+
+// Info data
+var INFO = {
+  'mood-slider':     { title: 'Mood Slider', desc: 'A 5-point emoji slider capturing the user\'s self-reported mood. Maps to: Very Negative (-2) through Very Positive (+2). Drives the entire AI response strategy and orb color.', tags: ['React', 'MoodSlider.jsx'] },
+  'text-input':      { title: 'Text Input', desc: 'Free-form textarea for brain dumping thoughts. Supports Cmd+Enter to submit. Text goes through crisis keyword detection before being sent to Claude.', tags: ['React', 'Home.jsx'] },
+  'voice-rec':       { title: 'Voice Recorder', desc: 'MediaRecorder API captures audio as WebM, sends to Deepgram Nova-2 via the backend proxy for transcription. Transcribed text follows the same analysis pipeline.', tags: ['MediaRecorder', 'Deepgram'] },
+  'vapi-conv':       { title: 'Live Voice Conversation', desc: 'Full bidirectional voice via Vapi SDK. WebRTC for audio, Deepgram for transcription, GPT-4o-mini for responses, OpenAI Nova for speech synthesis.', tags: ['Vapi SDK', 'WebRTC'] },
+  'orb':             { title: '3D Neural Orb', desc: '200-point neural network on Canvas 2D. Seeded random sphere points with connection graphs. Reacts to mood (HSL color), app state, and audio amplitude.', tags: ['Canvas 2D', 'OrbScene.jsx'] },
+  'journal':         { title: 'Journal + Tracker', desc: 'Stores 50 journal entries with AI-generated titles and emotion tags. 7-day mood chart, emotion frequency bars, streak tracking. localStorage persistence.', tags: ['React', 'Journal.jsx', 'Tracker.jsx'] },
+  'claude-proxy':    { title: 'Claude API Proxy', desc: 'POST /api/claude forwards to Anthropic API server-side. Supports custom system prompts, model selection, max tokens. Zero API keys in the browser.', tags: ['FastAPI', 'httpx'] },
+  'hume-proxy':      { title: 'Hume AI Proxy', desc: 'Submit text, poll job status, fetch predictions. Hume Batch Expression Measurement API detects 48 emotion dimensions from text.', tags: ['FastAPI', 'Hume AI'] },
+  'dg-proxy':        { title: 'Deepgram Proxy', desc: 'STT accepts raw audio bytes, returns transcriptions via Nova-2. TTS converts text to speech audio. Handles WAV and WebM.', tags: ['FastAPI', 'Deepgram'] },
+  'memory-proxy':    { title: 'Supermemory Proxy', desc: '/add saves entries, /search queries past memories. Per-user tags. Memory cards loaded on login, injected into every Claude prompt.', tags: ['FastAPI', 'Supermemory v3'] },
+  'therapist-ep':    { title: 'Therapist Search', desc: 'Queries NPPES NPI Registry (free US gov API) for licensed mental health providers. Results cached 6 hours. Also queries SAMHSA for facilities.', tags: ['NPPES', 'SAMHSA', 'Free'] },
+  'crisis-ep':       { title: 'Crisis Resources', desc: 'Hardcoded crisis hotlines. 988 Lifeline, Crisis Text Line, SAMHSA Helpline, Veterans Crisis Line, IU Counseling. Never depends on external APIs.', tags: ['Static', '24/7'] },
+  'claude-api':      { title: 'Claude (Anthropic)', desc: 'Core AI engine. Receives mood-stratified prompts with memory context. Returns structured JSON: acknowledgment, insight, micro-action, affirmation, stress level, theme.', tags: ['Anthropic API', 'Claude'] },
+  'hume-api':        { title: 'Hume AI', desc: 'Emotion detection from text via Expression Measurement API. Scores across 48 emotion dimensions for brain dump analysis and coaching.', tags: ['Hume AI', '48 Emotions'] },
+  'dg-api':          { title: 'Deepgram', desc: 'Nova-2 for speech-to-text. Also text-to-speech synthesis. Connected via backend proxy to keep API keys server-side.', tags: ['Deepgram', 'Nova-2'] },
+  'supermemory':     { title: 'Supermemory', desc: 'Per-user persistent AI memory. Stores moods, themes, stress, and conversation summaries. Builds a compact user card that personalizes every Claude response.', tags: ['Supermemory v3', 'Vector Search'] },
+  'nppes':           { title: 'NPPES Registry', desc: 'Free US gov database of every licensed healthcare provider. Searched by mental health taxonomy codes for therapists, psychologists, psychiatrists.', tags: ['CMS.gov', 'Free', 'No Key'] },
+  'vapi-api':        { title: 'Vapi Voice', desc: 'Real-time voice via WebRTC. Turn-taking, 60s silence timeout, 30 min max duration. Public key connects directly from frontend.', tags: ['Vapi', 'WebRTC'] },
+  'user-input':      { title: 'User Input', desc: 'Entry point: type thoughts in textarea or record voice. Both paths converge into the same Claude analysis pipeline after optional STT.', tags: ['Text', 'Voice'] },
+  'stt-node':        { title: 'Deepgram STT', desc: 'Speech-to-text using Nova-2. Audio recorded as WebM via MediaRecorder, sent to /api/deepgram/stt, transcribed in under 1 second.', tags: ['Deepgram Nova-2'] },
+  'mood-strat':      { title: 'Mood Strategy Selector', desc: 'Maps self-reported mood to 5 distinct response strategies. Each defines the tone, depth, urgency, and warmth of Claude\'s response.', tags: ['api.js', 'getMoodStrategy()'] },
+  'memory-inject':   { title: 'Memory Context', desc: 'Supermemory user card (50-100 tokens) injected into Claude system prompt. Enables cross-session personalization and pattern recognition.', tags: ['Supermemory', 'Personalization'] },
+  'claude-analysis': { title: 'Claude Analysis', desc: 'The heart of the system. Receives text, mood strategy, memory context, recent themes. Returns structured JSON with all response components.', tags: ['Claude API', 'JSON'] },
+  'crisis-check':    { title: 'Crisis Detection', desc: 'Client-side keyword matching for crisis terms. Runs before any API call. Triggers full-screen overlay with 988 Lifeline on detection.', tags: ['constants.js', 'checkCrisis()'] },
+  'crisis-path':     { title: '988 Lifeline', desc: 'All processing stops. Full-screen overlay with direct call/text links to 988, Crisis Text Line, and SAMHSA helpline.', tags: ['CrisisOverlay.jsx', '24/7'] },
+  'start-call':      { title: 'Start Conversation', desc: 'User taps button, Vapi SDK initializes WebRTC. Orb transitions to processing state while connecting.', tags: ['useVapi.js'] },
+  'listening':       { title: 'Listening State', desc: 'Orb pulses amber. Deepgram transcribes in real-time. No button holding — natural speech flow.', tags: ['Orb State', 'Deepgram'] },
+  'speaking-state':  { title: 'Speaking State', desc: 'Orb animates with speech-rhythm oscillator. Color shifts to emotional theme of the conversation.', tags: ['OrbScene.jsx'] },
+  'end-call':        { title: 'Save Transcript', desc: 'Full transcript saved. User prompted to add to journal or skip. Conversation summary saved to Supermemory.', tags: ['Home.jsx'] },
+  'slider-in':       { title: 'Mood Self-Report', desc: 'First interaction every session. Directly determines which response strategy Claude uses. Also drives the orb\'s color via HSL interpolation.', tags: ['MoodSlider.jsx'] },
+  'vn-strat':        { title: 'Very Negative', desc: 'Stress: 72-95. Deep empathy first. Grounding actions: 3 slow breaths, sit quietly, reach out. Remind them this moment is not permanent.', tags: ['Stress: HIGH'] },
+  'neg-strat':       { title: 'Negative', desc: 'Stress: 50-72. Calm, compassionate presence. Name the emotional root gently. Reduce immediate distress. Remind of resilience.', tags: ['Stress: MOD-HIGH'] },
+  'neu-strat':       { title: 'Neutral', desc: 'Stress: 30-55. Meet them where they are. Don\'t force positivity. Tiny energy shifts: step outside, drink water.', tags: ['Stress: MODERATE'] },
+  'pos-strat':       { title: 'Positive', desc: 'Stress: 15-35. Affirm and build. Name what\'s working. Sustain the energy: walk, appreciation note, focused task.', tags: ['Stress: LOW-MOD'] },
+  'vp-strat':        { title: 'Very Positive', desc: 'Stress: 0-20. Celebrate with enthusiasm! Name the driving strength. Lock it in: write this win down, share it.', tags: ['Stress: LOW'] },
+  'save-mem':        { title: 'Save to Supermemory', desc: 'After every interaction, entry data (mood, theme, stress, insight) is saved fire-and-forget. Memory card refreshes after 30s debounce.', tags: ['Supermemory', 'Non-blocking'] },
+};
+
+// Node click handler using data attributes
+document.querySelectorAll('.node[data-info]').forEach(function(node) {
+  node.addEventListener('click', function() {
+    var id = this.getAttribute('data-info');
+    showInfo(id);
+  });
+});
+
+function showInfo(id) {
+  var data = INFO[id];
+  if (!data) return;
+  document.getElementById('info-title').textContent = data.title;
+  document.getElementById('info-desc').textContent = data.desc;
+  var tagsEl = document.getElementById('info-tags');
+  // Clear existing tags
+  while (tagsEl.firstChild) tagsEl.removeChild(tagsEl.firstChild);
+  // Add new tags safely
+  (data.tags || []).forEach(function(t) {
+    var span = document.createElement('span');
+    span.className = 'tech-tag';
+    span.textContent = t;
+    tagsEl.appendChild(span);
+  });
+  document.getElementById('info-panel').classList.add('visible');
+}
+
+function hideInfo() {
+  document.getElementById('info-panel').classList.remove('visible');
+}
+
+document.addEventListener('keydown', function(e) { if (e.key === 'Escape') hideInfo(); });
+</script>
+
+</body>
+</html>
