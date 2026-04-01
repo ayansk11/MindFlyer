@@ -1,0 +1,30 @@
+{
+  "name": "mindflyer",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "AI-powered mental health support app with mood tracking, journaling, and habit personalization",
+  "main": "index.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "eslint src --ext .js,.jsx"
+  },
+  "dependencies": {
+    "@vapi-ai/web": "^2.5.2",
+    "firebase": "^12.11.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-icons": "^5.6.0",
+    "three": "^0.183.2"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.2.1",
+    "eslint": "^8.55.0",
+    "eslint-plugin-react": "^7.33.2",
+    "vite": "^5.0.10"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}
